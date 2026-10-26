@@ -18,7 +18,8 @@ export ANDROID_HOME=$HOME/Library/Android/sdk
 nohup $ANDROID_HOME/emulator/emulator -avd mill_avd_android-35_arm64-v8a_medium_phone \
   -port 5554 -no-metrics >/dev/null 2>&1 &
 ./mill app.run
-./mill app.test   # weaver suites on the JVM, no emulator
+./mill app.test          # weaver suites on the JVM, no emulator
+./mill app.androidTest   # weaver suite on the running emulator
 ```
 
 First-time setup is in [docs/running-and-debugging.md](docs/running-and-debugging.md). Mill downloads its own JDK (Zulu
@@ -33,7 +34,7 @@ First-time setup is in [docs/running-and-debugging.md](docs/running-and-debuggin
 | Language          | Scala 3.10.0                                                                 |
 | Build             | Mill 1.3.1 `AndroidAppScalaModule`, `ScalaLambdaFix` jar patch, d8           |
 | Runtime           | ART. minSdk 33, target and compile SDK 35                                    |
-| Tests             | weaver 0.13.0 and cats-effect-testkit on the JVM                             |
+| Tests             | weaver 0.13.0 on the JVM and on the emulator, UI Automator 2.4.0             |
 
 ## Code
 
@@ -53,24 +54,25 @@ MainActivity.onCreate
       SettingsScreen                         R.layout.settings, reset and back listeners, back gesture handler
 ```
 
-| File                                                       | Role                                                                                                                                                                |
-|------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `HelloApplication.scala`, `MainActivity.scala`             | Classes the manifest names. Process start and the UI entry point                                                                                                    |
-| `app/App.scala`                                            | Activity scope. `tickerStream` and `routerStream` on top of the application scope                                                                                   |
-| `app/ApplicationScope.scala`                               | State and route refs that outlive any Activity. Never holds views                                                                                                   |
-| `domain/State.scala`                                       | Pure state. `State`, `Mutation` and `update`. No Android or UI code                                                                                                 |
-| `screens/Route.scala`, `screens/Env.scala`                 | The screens the app can show and the context passed to each                                                                                                         |
-| `screens/HomeScreen.scala`, `screens/SettingsScreen.scala` | One `Resource` per screen. `HomeScreen` also renders `State` to text                                                                                                |
-| `platform/MainThread.scala`                                | Main looper as an `ExecutionContext`. `MainThread(f)` is `IO(f).evalOn(MainThread.ec)`                                                                              |
-| `platform/AndroidRuntime.scala`                            | The single `IORuntime`. Logs unhandled errors under the tag `IORuntime`                                                                                             |
-| `platform/Lifecycles.scala`                                | `whileCreated` runs a `Resource` until ON_DESTROY. `hidden` is a signal that is true while stopped                                                                  |
-| `platform/Views.scala`                                     | `mount` inflates a layout, `onClick` and `onBack` register listeners. All as `Resource`                                                                             |
-| `res/layout/*.xml`                                         | `activity`, `home` and `settings` layouts                                                                                                                           |
-| `layouts` (generated)                                      | `HomeLayout`, `SettingsLayout`, `ActivityLayout`. One final class per layout with a typed field per `@+id`. Written to `out/app/layoutBindings.dest` on every build |
-| `build.mill`                                               | Versions, dependencies, patch hook                                                                                                                                  |
-| `mill-build/src/ScalaLambdaFix.scala`                      | ASM rewrite of dependency jars so d8 emits lambdas ART accepts                                                                                                      |
-| `mill-build/src/LayoutBindings.scala`                      | Generator for the `layouts` package. A renamed or removed id becomes a compile error                                                                                |
-| `app/src/test/scala`                                       | Weaver suites for `State`, `tickerStream` and `routerStream`. Run on the JVM with `TestControl` time                                                                |
+| File                                                       | Role                                                                                                                                                                                                             |
+|------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `HelloApplication.scala`, `MainActivity.scala`             | Classes the manifest names. Process start and the UI entry point                                                                                                                                                 |
+| `app/App.scala`                                            | Activity scope. `tickerStream` and `routerStream` on top of the application scope                                                                                                                                |
+| `app/ApplicationScope.scala`                               | State and route refs that outlive any Activity. Never holds views                                                                                                                                                |
+| `domain/State.scala`                                       | Pure state. `State`, `Mutation` and `update`. No Android or UI code                                                                                                                                              |
+| `screens/Route.scala`, `screens/Env.scala`                 | The screens the app can show and the context passed to each                                                                                                                                                      |
+| `screens/HomeScreen.scala`, `screens/SettingsScreen.scala` | One `Resource` per screen. `HomeScreen` also renders `State` to text                                                                                                                                             |
+| `platform/MainThread.scala`                                | Main looper as an `ExecutionContext`. `MainThread(f)` is `IO(f).evalOn(MainThread.ec)`                                                                                                                           |
+| `platform/AndroidRuntime.scala`                            | The single `IORuntime`. Logs unhandled errors under the tag `IORuntime`                                                                                                                                          |
+| `platform/Lifecycles.scala`                                | `whileCreated` runs a `Resource` until ON_DESTROY. `hidden` is a signal that is true while stopped                                                                                                               |
+| `platform/Views.scala`                                     | `mount` inflates a layout, `onClick` and `onBack` register listeners. All as `Resource`                                                                                                                          |
+| `res/layout/*.xml`                                         | `activity`, `home` and `settings` layouts                                                                                                                                                                        |
+| `layouts` (generated)                                      | `HomeLayout`, `SettingsLayout`, `ActivityLayout`. One final class per layout with a typed field per `@+id`, and typed ids such as `HomeLayout.id.click`. Written to `out/app/layoutBindings.dest` on every build |
+| `build.mill`                                               | Versions, dependencies, patch hook                                                                                                                                                                               |
+| `mill-build/src/ScalaLambdaFix.scala`                      | ASM rewrite of dependency jars so d8 emits lambdas ART accepts                                                                                                                                                   |
+| `mill-build/src/LayoutBindings.scala`                      | Generator for the `layouts` package. A renamed or removed id becomes a compile error                                                                                                                             |
+| `app/src/test/scala`                                       | Weaver suites for `State`, `tickerStream` and `routerStream`. Run on the JVM with `TestControl` time                                                                                                             |
+| `app/src/androidTest/scala`                                | `AppFlowSuite` runs inside the app process on the emulator. `AppDriver` taps and checks views by typed id                                                                                                        |
 
 ## Docs
 
@@ -87,6 +89,6 @@ MainActivity.onCreate
 - State and route survive Activity recreation but not process death. Restoring them after that needs
   `onSaveInstanceState` or disk.
 - R8 is not wired into `build.mill`. The running guide has manual steps.
-- Tests run on the JVM only. Views, lifecycle and the patched dex are not covered by tests.
+- Instrumented tests run against the debug APK. The R8 build and process death are not tested.
 - `ScalaLambdaFix` stays required until cats and Cats Effect publish builds made with Scala 3.3.7 or later.
 - minSdk is 33 (Android 13) because Scala 3.8+ lazy vals need `VarHandle`.

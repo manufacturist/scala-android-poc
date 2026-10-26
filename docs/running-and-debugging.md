@@ -88,6 +88,7 @@ Cold boot takes 30 to 40 seconds. `./mill app.startAndroidEmulator` also works b
 | `./mill app.androidRun`          | Launch `MainActivity`                                    |
 | `./mill app.run`                 | Install and launch                                       |
 | `./mill app.test`                | Run the weaver suites on the JVM                         |
+| `./mill app.androidTest`         | Run the instrumented suite on the emulator               |
 | `./mill app.stopAndroidEmulator` | Kill the emulator on port 5554                           |
 | `./mill shutdown`                | Restart the Mill daemon                                  |
 | `./mill clean`                   | Delete `out/`                                            |
@@ -96,11 +97,19 @@ Default builds are debuggable and not shrunk. Mill signs them with `~/.mill-andr
 
 ## Tests
 
-`app.test` runs weaver suites from `app/src/test/scala` on the host JVM. No emulator.
+| Command                  | Suites                      | Runs on                               |
+|--------------------------|-----------------------------|---------------------------------------|
+| `./mill app.test`        | `app/src/test/scala`        | Host JVM. No emulator                 |
+| `./mill app.androidTest` | `app/src/androidTest/scala` | App process on the running emulator   |
+
+### JVM
 
 ```sh
 ./mill app.test
-./mill app.test dev.typelevel.hello.app.AppSuite   # one suite
+./mill app.test.testOnly dev.typelevel.hello.app.AppSuite                   # one suite
+./mill app.test.testOnly 'dev.typelevel.hello.app.*'                        # suites by glob
+./mill app.test.testOnly dev.typelevel.hello.app.AppSuite -- -o '*ticker*'  # tests by name
+./mill -w app.test                                                          # rerun on every change
 ```
 
 - `android.*` classes on the test classpath are stubs that throw `Stub!`. Test code that does not call them. `App`
@@ -108,6 +117,36 @@ Default builds are debuggable and not shrunk. Mill signs them with `~/.mill-andr
 - `TestControl.executeEmbed` from cats-effect-testkit runs a program on a virtual clock. `IO.sleep` returns once all
   other fibers are idle, so a test can set a signal, sleep and read the result without real waiting.
 - The JVM does not run d8, ART verification or the lambda patch. A green `app.test` says nothing about the APK.
+
+### Instrumented
+
+`app.androidTest` builds the app APK and a test APK, installs both and runs `am instrument` with
+`AndroidJUnitRunner`. The suite runs inside the app process. `AppFlowSuite` holds the tests. `AppDriver` launches
+the app, taps and checks views by typed id (`tap(HomeLayout.id.click)`) through UI Automator, and reaches
+`HelloApplication.scope` directly. `AndroidWeaverRunner` works around a weaver reporting bug.
+
+```sh
+./mill app.androidTest                                                       # 6 tests, about 30 s with build and install
+./mill app.androidTest.testForked -e class dev.typelevel.hello.AppFlowSuite  # one suite
+adb shell am instrument -w -r -e class dev.typelevel.hello.AppFlowSuite \
+  dev.typelevel.hello.test/androidx.test.runner.AndroidJUnitRunner           # rerun without build or install
+adb logcat -s TestRunner                                                     # failure messages
+```
+
+Arguments after `testForked` go to `am instrument`. Single tests cannot be picked from the command line. Weaver's
+runner does not implement JUnit's `Filterable`, so a `-e class Suite#test` filter cannot narrow a suite. Mark the
+test with weaver's `.only` instead, `test("click increments the counter".only)`. The others report as ignored.
+This works for JVM suites too.
+
+- Mill lists failing tests without the message. Weaver's message with the selector and the line is in
+  `adb logcat -s TestRunner`.
+- All tests share one process and one `ApplicationScope`. `launch` resets `stateRef` and `routeRef`, then starts
+  `MainActivity` in a new task. It allows 30 s for the first screen, other waits 5 s.
+- `maxParallelism = 1`. Tests share one screen.
+- A UI Automator lookup waits until the UI is idle. The ticker changes the status text every second, so a lookup
+  takes 0.1 to 1.5 s.
+- Not covered: the R8 build (Mill instruments the debug APK), process death, real microphone input.
+- The test APK setup in `build.mill` and the suite shape are explained in [gotchas.md](gotchas.md).
 
 ## Physical device
 

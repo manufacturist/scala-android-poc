@@ -12,9 +12,14 @@ import javax.xml.parsers.DocumentBuilderFactory
   * {{{
   * final class HomeLayout(val rootView: View, val status: android.widget.TextView) extends Layout
   * object HomeLayout extends LayoutBinding[HomeLayout]:
-  *   val id: Int = R.layout.home
+  *   val layoutId: Int = R.layout.home
   *   def bind(rootView: View): HomeLayout = ...
+  *   object id:
+  *     val status: ViewId[android.widget.TextView] = ViewId(R.id.status)
   * }}}
+  *
+  * `HomeLayout.id.status` mirrors `R.id.status` but is scoped to the layout and typed with the view class. Code that
+  * holds no inflated layout, such as instrumented tests, refers to views through it.
   *
   * Ids present in only some variants (layout-w600dp and friends) become Option fields. Ids whose view class differs
   * between variants are typed as android.view.View.
@@ -122,6 +127,9 @@ object LayoutBindings {
     val params = fields.map { (name, cls, optional) =>
       s"    val ${field(name)}: ${if (optional) s"Option[$cls]" else cls}"
     }
+    val ids    = fields.map { (name, cls, _) =>
+      s"    val ${field(name)}: ViewId[$cls] = ViewId($namespace.R.id.$name)"
+    }
     val args   = fields.map { (name, cls, optional) =>
       val lookup = s"rootView.findViewById[$cls]($namespace.R.id.$name)"
       if (optional) s"      Option($lookup)" else s"""      java.util.Objects.requireNonNull($lookup, "$name")"""
@@ -136,13 +144,13 @@ object LayoutBindings {
         |) extends Layout
         |
         |object $tpe extends LayoutBinding[$tpe]:
-        |  val id: Int = $namespace.R.layout.$layout
+        |  val layoutId: Int = $namespace.R.layout.$layout
         |
         |  def bind(rootView: View): $tpe =
         |    $tpe(
         |      rootView${args.map(",\n" + _).mkString}
         |    )
-        |""".stripMargin
+        |${if (ids.isEmpty) "" else ids.mkString("\n  object id:\n", "\n", "\n")}""".stripMargin
   }
 
   private def bindingTrait(pkg: String): String =
@@ -157,16 +165,24 @@ object LayoutBindings {
         |
         |/** A layout resource with typed lookups for its views. */
         |trait LayoutBinding[A <: Layout]:
-        |  def id: Int
+        |  def layoutId: Int
         |  def bind(rootView: View): A
         |
         |  /** Inflates without attaching to `parent`. Layout params come from `parent`. */
         |  def inflate(parent: ViewGroup): A =
-        |    bind(LayoutInflater.from(parent.getContext).inflate(id, parent, false))
+        |    bind(LayoutInflater.from(parent.getContext).inflate(layoutId, parent, false))
         |
         |  /** Inflates without a parent, for an Activity root. setContentView applies match_parent. */
         |  def inflate(inflater: LayoutInflater): A =
-        |    bind(inflater.inflate(id, null))
+        |    bind(inflater.inflate(layoutId, null))
+        |
+        |/** A view id typed with the class of its view. An Int at runtime. */
+        |opaque type ViewId[+V <: View] = Int
+        |
+        |object ViewId:
+        |  def apply[V <: View](value: Int): ViewId[V] = value
+        |
+        |  extension (id: ViewId[View]) def value: Int = id
         |""".stripMargin
 
   private def camel(s: String): String = {

@@ -86,4 +86,28 @@ object app extends AndroidAppScalaModule {
     def weaverVersion = "0.13.0"
     def mvnDeps       = Seq(mvn"org.typelevel::cats-effect-testkit:3.7.1")
   }
+
+  // Instrumented tests in app/src/androidTest/scala. They run inside the app process on a device or emulator.
+  // TestModule.Weaver is not mixed in: Mill writes testFramework into the test manifest as the instrumentation runner.
+  object androidTest extends AndroidAppScalaInstrumentedTests {
+    def mvnDeps = Seq(
+      mvn"org.typelevel::weaver-cats:0.13.0",
+      mvn"androidx.test:runner:1.7.0",
+      mvn"androidx.test.uiautomator:uiautomator:2.4.0"
+    )
+
+    // Android loads the test APK before the app APK in one class loader, so whatever both contain comes from the
+    // test APK: unpatched cats jars, app classes, R ids. Mill packs all of these by default. Keep the suites and
+    // test-only libraries. Jars the app already packs are matched by artifact and version. R.jar goes too,
+    // the suites use no resources.
+    override def androidPackagedDeps: T[Seq[PathRef]] = Task {
+      def artifact(jar: PathRef) = jar.path.segments.toSeq.takeRight(3)
+      val inApp                  = (app.androidResolvedRunMvnDeps() ++ app.androidRepackagedDeps()).map(artifact).toSet
+      super.androidPackagedDeps().filterNot(jar => inApp(artifact(jar)) || jar == androidProcessedResources())
+    }
+
+    override def androidPackagedClassfiles: T[Seq[PathRef]] = Task {
+      os.walk(compile().classes.path).filter(_.ext == "class").map(PathRef(_))
+    }
+  }
 }

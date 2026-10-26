@@ -73,6 +73,9 @@ inner (Settings)                                               waits for release
 - `mill-build/src/LayoutBindings.scala` generates one `final class` per layout in the `layouts` package, with a typed
   field per `@+id`. A renamed or removed id is a compile error. Ids missing from some layout variants become `Option`
   fields.
+- Each binding companion also has an `id` object with one `ViewId[V]` per `@+id`, typed with the view class.
+  `HomeLayout.id.click` is `R.id.click` scoped to the home layout. Code without an inflated layout, such as the
+  instrumented tests, refers to views through it. The layout resource itself is `HomeLayout.layoutId`.
 - `R.id` is one flat namespace per app. The generated bindings scope lookups to their layout's root view.
 - `Views.onClick` and `Views.onBack` register in acquire and unregister in release.
 

@@ -223,6 +223,51 @@ cmdline-tools 19.0 prints no such warnings.
 
 R8 prints several hundred of these for Scala nested objects. They are harmless. Only `Error` and `Warning` lines matter.
 
+## Instrumented tests
+
+### Test APK classes shadow the app
+
+Android runs the test APK and the app APK in one process with one class loader, test APK first
+(`LoadedApk.makePaths`). By default Mill packs every runtime dependency, the app's classes and an `R.jar` into the
+test APK. The unpatched cats jars then load instead of the app's patched copies, d8 prints the stack map warnings
+again, and R ids come from a separate resource link.
+
+`app.androidTest` overrides `androidPackagedDeps` and `androidPackagedClassfiles` to keep the suites and test-only
+jars. A jar the app packs at the same artifact and version is dropped. Newer versions stay.
+
+One version differs. The app resolves kotlinx-coroutines 1.6.4, the highest version its libraries ask for
+(`lifecycle-common` 2.6.2 through AppCompat and Material). UI Automator 2.4.0 pulls `androidx.test:core` 1.7.0,
+which asks for 1.8.1, so the test APK carries 1.8.1 and it shadows the app's copy. This is harmless here. Only
+`lifecycle-common`, `lifecycle-viewmodel-savedstate`, `activity` and `core` reference coroutines, for Kotlin APIs
+such as `lifecycleScope` that the app never calls. R8 keeps no coroutines class in the release build.
+
+### Weaver passes tests that throw
+
+`WeaverRunner` reports a test that ends in an exception with `fireTestFailure` and no `fireTestFinished`. Assertion
+failures get both. `AndroidJUnitRunner` sends a result to `am instrument` only on finish, so Mill reported
+`SUCCESS`, the run counted 5 of 6 tests, and the failure appeared only in logcat. Present in weaver 0.13.0 and on
+main. `AndroidWeaverRunner` wraps the notifier and finishes each test right after its failure.
+
+### Weaver suites must be classes
+
+`WeaverRunner` loads the class that carries `@RunWith`. For a Scala `object` that is the mirror class, which holds
+no instance, and the run fails with `Could not find class`. A class without the expected constructor fails with
+`Could not find a suitable constructor that takes GlobalResourceF.Read`. The working shape is
+`class AppFlowSuite(global: GlobalRead) extends SimpleIOSuite` with `@RunWith(classOf[AndroidWeaverRunner])`.
+
+### TestModule.Weaver replaces the instrumentation runner
+
+Mill writes `testFramework` into the test manifest as the instrumentation class. `TestModule.Weaver` sets it to
+`weaver.framework.CatsEffect` instead of `AndroidJUnitRunner`. Add weaver as a plain dependency.
+
+### Failure messages are only in logcat
+
+Mill's report says `No Exception or message provided`. Read `adb logcat -s TestRunner`.
+
+### d8 warns about Kotlin metadata
+
+UI Automator 2.4.0 is built with a newer Kotlin than build-tools 35 d8 knows. The warnings do not affect the dex.
+
 ## Toolchain
 
 ### Android SDK location not found
@@ -356,4 +401,7 @@ The API 35 Play system image takes 2.2 GB. `out/` takes about 140 MB.
 | AppCompat           | 1.8.0                | AAR. Requires compileSdk 34 or newer                         |
 | Material Components | 1.14.0               | AAR. Material 3 theme `Theme.Material3.DayNight.NoActionBar` |
 | Mill                | 1.3.1                | Scala Android support marked experimental                    |
+| weaver              | 0.13.0               | Built with 3.3.7, unpatched. JVM and instrumented tests      |
+| androidx.test       | runner 1.7.0         | `AndroidJUnitRunner`, `ActivityLifecycleMonitorRegistry`     |
+| UI Automator        | 2.4.0                | Instrumented tests. Kotlin, pulls kotlinx-coroutines 1.8.1   |
 | Android             | minSdk 33, target 35 | build-tools 35.0.0                                           |
