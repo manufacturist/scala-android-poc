@@ -20,7 +20,7 @@ The cast to `HelloApplication` is safe only because the manifest names it.
 |-------------|---------------------------------------------------------------|--------------------------|----------------------------------------------------------|
 | Application | `HelloApplication`                                            | The process              | `ApplicationScope`: `stateRef`, `routeRef`               |
 | Activity    | `Lifecycles.whileCreated(App.run)` in `MainActivity.onCreate` | `onCreate` to ON_DESTROY | `Dispatcher`, `Env`, ticker fiber, router fiber          |
-| Visible     | `Lifecycles.hidden`                                           | `onStart` to `onStop`    | The ticker pauses outside it through `pauseWhen(hidden)` |
+| Visible     | `Lifecycles.hidden`                                           | `onStart` to `onStop`    | The ticker. A fresh `awakeEvery` per visible period      |
 | Screen      | `routerStream`                                                | Until the route changes  | Inflated layout, listeners, render fiber                 |
 
 `ApplicationScope.create.memoize.unsafeRunSync()` only creates the memo cell. The first run of `HelloApplication.scope`
@@ -34,7 +34,7 @@ The application scope never holds views. A View or Activity referenced from it w
 | Thread         | Runs                                                                                                                                                                  |
 |----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `main`         | Lifecycle callbacks, input, view measure, layout and draw. Code reaches it through `MainThread(f)`, which is `IO(f).evalOn(MainThread.ec)` posting to the main looper |
-| `io-compute-N` | All fibers. One worker per CPU core. A breakpoint in `State.step` stops on `io-compute-0`                                                                             |
+| `io-compute-N` | All fibers. One worker per CPU core. A breakpoint in `State.update` stops on `io-compute-0`                                                                           |
 | `RenderThread` | GPU rendering, owned by Android                                                                                                                                       |
 
 Android callbacks enter `IO` through a `Dispatcher` (`env.send`, `env.navigate`, `Lifecycles.hidden`). Nothing blocks
@@ -92,7 +92,7 @@ inner (Settings)                                               waits for release
 |------------|-------------------------------------------------------|---------------------------------|
 | root       | `HelloApplication`, `MainActivity`                    | `app`, `platform`, `layouts`    |
 | `app`      | `App`, `ApplicationScope`                             | `domain`, `screens`, `platform` |
-| `domain`   | `State`, `Message`, `step`                            | nothing                         |
+| `domain`   | `State`, `Mutation`, `update`                         | nothing                         |
 | `screens`  | `Route`, `Env`, `HomeScreen`, `SettingsScreen`        | `domain`, `platform`, `layouts` |
 | `platform` | `AndroidRuntime`, `MainThread`, `Lifecycles`, `Views` | `layouts`                       |
 | `layouts`  | Generated bindings                                    | `R`                             |

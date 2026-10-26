@@ -119,6 +119,18 @@ disappears at once. `App` appends `>> Stream.never[IO]` so the screen stays unti
 `navigate(Route.Home)` while on Home remounts Home and restarts its fibers. `App` uses `routeRef.discrete.changes` with
 `given Eq[Route]` in the `Route` companion.
 
+### pauseWhen over awakeEvery over-counts
+
+`Stream.awakeEvery(1.second).pauseWhen(hidden)` added two seconds per hide and show cycle. `pauseWhen` checks the
+signal before pulling, so the tick already in flight passes after `hidden` turns true. On resume `awakeEvery` emits
+one catch-up tick for the missed time. Found by `AppSuite`.
+
+`tickerStream` starts a fresh timer per visible period instead.
+
+```scala
+hidden.discrete.changes.switchMap(isHidden => if isHidden then Stream.empty else Stream.awakeEvery[IO](1.second))
+```
+
 ### Background fiber errors are silent
 
 `.compile.drain.background` discards the fiber `Outcome`. A failing ticker or render stream logs nothing and the UI
@@ -136,8 +148,8 @@ guards its own uses. Test other libraries on a device.
 
 ### Edge-to-edge
 
-With targetSdk 35 Android 15 draws content under the system bars. `MainActivity` calls
-`root.setFitsSystemWindows(true)`.
+With targetSdk 35 Android 15 draws content under the system bars. `res/layout/activity.xml` sets
+`android:fitsSystemWindows="true"` on the container.
 
 ### Kotlin-only Android libraries
 

@@ -80,4 +80,10 @@ object app extends AndroidAppScalaModule {
       ScalaLambdaFix.patchJar(jar.path, Task.dest / s"$i-${jar.path.last}").fold(jar)(PathRef(_))
     }
   }
+
+  // JVM unit tests in app/src/test/scala. android.* classes are stubs here, so test code that avoids them.
+  object test extends AndroidAppScalaTests, TestModule.Weaver {
+    def weaverVersion = "0.13.0"
+    def mvnDeps       = Seq(mvn"org.typelevel::cats-effect-testkit:3.7.1")
+  }
 }

@@ -87,11 +87,27 @@ Cold boot takes 30 to 40 seconds. `./mill app.startAndroidEmulator` also works b
 | `./mill app.androidInstall`      | Install on the running emulator or device                |
 | `./mill app.androidRun`          | Launch `MainActivity`                                    |
 | `./mill app.run`                 | Install and launch                                       |
+| `./mill app.test`                | Run the weaver suites on the JVM                         |
 | `./mill app.stopAndroidEmulator` | Kill the emulator on port 5554                           |
 | `./mill shutdown`                | Restart the Mill daemon                                  |
 | `./mill clean`                   | Delete `out/`                                            |
 
 Default builds are debuggable and not shrunk. Mill signs them with `~/.mill-android/mill-debug.jks`.
+
+## Tests
+
+`app.test` runs weaver suites from `app/src/test/scala` on the host JVM. No emulator.
+
+```sh
+./mill app.test
+./mill app.test dev.typelevel.hello.app.AppSuite   # one suite
+```
+
+- `android.*` classes on the test classpath are stubs that throw `Stub!`. Test code that does not call them. `App`
+  exposes `tickerStream` and `routerStream` for this reason.
+- `TestControl.executeEmbed` from cats-effect-testkit runs a program on a virtual clock. `IO.sleep` returns once all
+  other fibers are idle, so a test can set a signal, sleep and read the result without real waiting.
+- The JVM does not run d8, ART verification or the lambda patch. A green `app.test` says nothing about the APK.
 
 ## Physical device
 
@@ -122,8 +138,8 @@ adb logcat -s IORuntime
 
 ## Debugger
 
-Debug builds accept JDWP connections through adb. Tested with `jdb` when `step` still lived in `Model`. The class is now
-`dev.typelevel.hello.domain.State$`.
+Debug builds accept JDWP connections through adb. Tested with `jdb` when the method was `Model.step`. The commands use
+the current name `State.update`.
 
 ```sh
 adb shell am set-debug-app -w dev.typelevel.hello              # next launch waits for a debugger
@@ -131,10 +147,10 @@ adb shell am start -n dev.typelevel.hello/.MainActivity
 adb forward tcp:5005 jdwp:$(adb shell pidof dev.typelevel.hello)
 
 jdb -attach localhost:5005
-> stop in dev.typelevel.hello.domain.State$.step
+> stop in dev.typelevel.hello.domain.State$.update
 > resume
 # tap the button
-Breakpoint hit: "thread=io-compute-0", dev.typelevel.hello.domain.State$.step(), line=11 bci=0
+Breakpoint hit: "thread=io-compute-0", dev.typelevel.hello.domain.State$.update(), line=14 bci=0
 > where
 > quit
 
