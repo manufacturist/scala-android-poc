@@ -29,7 +29,7 @@ object AppDriver:
   private val context         = instrumentation.getTargetContext
   private val monitor         = ActivityLifecycleMonitorRegistry.getInstance
 
-  // The first start after an install can take well over 5 s on a busy emulator
+  // The first start after an install can take well over 5[s] on a busy emulator
   private val launchMaxTimeout = 30.seconds
   private val timeout          = 5.seconds
 

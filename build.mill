@@ -34,7 +34,18 @@ object androidSdkModule0 extends AndroidSdkModule {
 
 final case class PlatformJars(jar: PathRef, sources: Option[PathRef]) derives upickle.default.ReadWriter
 
-object app extends AndroidAppScalaModule {
+// Mill's AndroidModule reports only AAR sources to IDEs over BSP. Add the source jars of plain jar dependencies,
+// including those of upstream modules for the test modules, so IntelliJ shows library sources and Scaladoc instead
+// of decompiled TASTy. defaultResolver resolves the same versions as the Android classpath.
+trait LibrarySources extends AndroidModule {
+  override def bspMvnDependencySources: T[Seq[PathRef]] = Task {
+    val deps = Task.traverse(transitiveModuleDeps)(_.allMvnDeps)().flatten
+    (super.bspMvnDependencySources() ++ defaultResolver().classpath(deps, sources = true) ++
+      androidSdkModule0.androidSourcesJar()).distinct
+  }
+}
+
+object app extends AndroidAppScalaModule, LibrarySources {
   def scalaVersion                = "3.10.0"
   def androidSdkModule            = mill.api.ModuleRef(androidSdkModule0)
   // Scala 3.8+ lazy vals (stdlib included) use java.lang.invoke.VarHandle, which Android has from API 33.
@@ -53,14 +64,6 @@ object app extends AndroidAppScalaModule {
       // or libraries built on 3.3 drag in the old one and d8 rejects the duplicate classes.
       mvn"org.scala-lang:scala3-library_3:${scalaVersion()}"
     )
-  }
-
-  // Mill's AndroidModule reports only AAR sources to IDEs over BSP. Add the source jars of plain
-  // jar dependencies so IntelliJ shows library sources and Scaladoc instead of decompiled TASTy.
-  override def bspMvnDependencySources: T[Seq[PathRef]] = Task {
-    super.bspMvnDependencySources() ++
-      defaultResolver().classpath(mandatoryMvnDeps() ++ mvnDeps(), sources = true) ++
-      androidSdkModule0.androidSourcesJar()
   }
 
   // Typed bindings for res/layout*/*.xml, one final class per layout. See mill-build/src/LayoutBindings.scala.
@@ -82,14 +85,14 @@ object app extends AndroidAppScalaModule {
   }
 
   // JVM unit tests in app/src/test/scala. android.* classes are stubs here, so test code that avoids them.
-  object test extends AndroidAppScalaTests, TestModule.Weaver {
+  object test extends AndroidAppScalaTests, TestModule.Weaver, LibrarySources {
     def weaverVersion = "0.13.0"
     def mvnDeps       = Seq(mvn"org.typelevel::cats-effect-testkit:3.7.1")
   }
 
   // Instrumented tests in app/src/androidTest/scala. They run inside the app process on a device or emulator.
   // TestModule.Weaver is not mixed in: Mill writes testFramework into the test manifest as the instrumentation runner.
-  object androidTest extends AndroidAppScalaInstrumentedTests {
+  object androidTest extends AndroidAppScalaInstrumentedTests, LibrarySources {
     def mvnDeps = Seq(
       mvn"org.typelevel::weaver-cats:0.13.0",
       mvn"androidx.test:runner:1.7.0",
