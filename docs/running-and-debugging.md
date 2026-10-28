@@ -1,6 +1,6 @@
 # Running and debugging
 
-Tested on macOS (Apple Silicon) with Mill 1.3.1 and an API 35 emulator in October 2026. Check [gotchas.md](gotchas.md)
+Tested on macOS (Apple Silicon) with Mill 1.3.1 and an API 36 emulator in October 2026. Check [gotchas.md](gotchas.md)
 when something fails.
 
 - [Prerequisites](#prerequisites)
@@ -55,10 +55,10 @@ The commands below assume both lines.
 
    ```sh
    $ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager --install \
-     "system-images;android-35;google_apis_playstore;arm64-v8a" "emulator" < /dev/null
+     "system-images;android-36;google_apis_playstore;arm64-v8a" "emulator" < /dev/null
    echo no | $ANDROID_HOME/cmdline-tools/19.0/bin/avdmanager create avd \
-     --name mill_avd_android-35_arm64-v8a_medium_phone \
-     --package "system-images;android-35;google_apis_playstore;arm64-v8a" \
+     --name mill_avd_android-36_arm64-v8a_medium_phone \
+     --package "system-images;android-36;google_apis_playstore;arm64-v8a" \
      --device medium_phone --force
    ```
 
@@ -68,7 +68,7 @@ The commands below assume both lines.
 
 ```sh
 # start the emulator detached so it survives Mill daemon restarts
-nohup emulator -avd mill_avd_android-35_arm64-v8a_medium_phone -port 5554 -no-metrics >/dev/null 2>&1 &
+nohup emulator -avd mill_avd_android-36_arm64-v8a_medium_phone -port 5554 -no-metrics -gpu host >/dev/null 2>&1 &
 adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
 
 ./mill app.run                   # build, install and launch after each change
@@ -233,7 +233,7 @@ launchctl setenv ANDROID_HOME "$HOME/Library/Android/sdk"   # lasts until logout
 
 Library sources and docs come from source jars that Mill reports over BSP. IntelliJ attaches a source jar only when it
 sits in the same directory as the jar, named `<name>-sources.jar`. `android.jar` contains stubs only and its sources
-ship separately in the SDK's `sources/android-35` folder. `androidSdkModule0.androidPlatformJars` copies `android.jar`
+ship separately in the SDK's `sources/android-36` folder. `androidSdkModule0.androidPlatformJars` copies `android.jar`
 into `out/androidSdkModule0/androidPlatformJars.dest/` and packs the sources beside it as `android-sources.jar` (46 MB,
 built once). The build uses that copy.
 
@@ -246,7 +246,7 @@ under Project Structure. The BSP sync resets the module SDK and the cats and fs2
 ## APK inspection
 
 ```sh
-BT=$ANDROID_HOME/build-tools/35.0.0
+BT=$ANDROID_HOME/build-tools/36.0.0
 APK=out/app/androidApk.dest/app.apk
 
 unzip -lv $APK                                    # entries and compressed sizes
@@ -285,7 +285,7 @@ Before Material the release APK was 192 KB. The output is signed with the debug 
 local testing.
 
 ```sh
-BT=$ANDROID_HOME/build-tools/35.0.0
+BT=$ANDROID_HOME/build-tools/36.0.0
 R8=$ANDROID_HOME/cmdline-tools/19.0/bin/r8
 W=$PWD/out/r8 && rm -rf $W && mkdir -p $W/dex
 
@@ -301,7 +301,7 @@ cat >> $W/rules.pro <<'EOF'
 -keepclassmembers class * { *** *$lzy*; *** *bitmap$*; }
 EOF
 
-$R8 --release --min-api 33 --lib $ANDROID_HOME/platforms/android-35/android.jar \
+$R8 --release --min-api 33 --lib $ANDROID_HOME/platforms/android-36/android.jar \
   --pg-conf $W/rules.pro --pg-map-output $W/mapping.txt --output $W/dex \
   $W/app-classes.jar $(cat $W/jars.txt)
 

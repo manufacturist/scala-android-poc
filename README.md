@@ -1,15 +1,17 @@
 # Hello Typelevel on Android (experiment)
 
-Android app in Scala 3.10 with Cats Effect and fs2. Built with Mill. Runs on ART like a Java or Kotlin app. No GraalVM
-and no JavaFX.
+Android app in Scala 3.10 with Cats Effect and fs2. Built with Mill. Runs on ART like a Java or Kotlin app. The goal was
+to see if the developer experience is good enough to attempt a larger project with Scala on Android.
 
-It has two screens. Home shows a click counter and an uptime ticker. The settings screen allows the counter to be reset.
-Clicks go through a Cats Effect `Dispatcher` into an fs2 `SignallingRef`. The ticker is a `Stream.awakeEvery` fiber that
-runs while the app is visible. `HomeScreen` runs `stateUpdateStream`, which updates the visible text from
+This app has two screens. Home shows a click counter and an uptime ticker. The settings screen allows the counter to be
+reset. Clicks go through a Cats Effect `Dispatcher` into an fs2 `SignallingRef`. The ticker is a `Stream.awakeEvery`
+fiber that runs while the app is visible. `HomeScreen` runs `stateUpdateStream`, which updates the visible text from
 `stateRef.discrete` on the main thread.
 
-Tested on an API 35 emulator in October 2026. The debug build passes full ART verification. The R8 release build is 2.5
+Tested on an API 36 emulator in October 2026. The debug build passes full ART verification. The R8 release build is 2.5
 MB and runs. Both need the workarounds in [docs/gotchas.md](docs/gotchas.md).
+
+Content is human reviewed, with the exception of `docs/*`, `mill-build/src/*` and `build.mill`.
 
 ## Quick start
 
@@ -17,7 +19,7 @@ MB and runs. Both need the workarounds in [docs/gotchas.md](docs/gotchas.md).
 export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
 
-nohup emulator -avd mill_avd_android-35_arm64-v8a_medium_phone -port 5554 -no-metrics >/dev/null 2>&1 &
+nohup emulator -avd mill_avd_android-36_arm64-v8a_medium_phone -port 5554 -no-metrics -gpu host >/dev/null 2>&1 &
 adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
 
 ./mill app.run           # build, install and launch
@@ -36,7 +38,7 @@ First-time setup is in [docs/running-and-debugging.md](docs/running-and-debuggin
 | Effects and state | Cats Effect 3.7.1, fs2 3.14.0                                                            |
 | Language          | Scala 3.10.0                                                                             |
 | Build             | Mill 1.3.1 `AndroidAppScalaModule`, `ScalaLambdaFix` jar patch, d8                       |
-| Runtime           | ART. minSdk 33, target and compile SDK 35                                                |
+| Runtime           | ART. minSdk 33, target and compile SDK 36                                                |
 | Tests             | weaver 0.13.0, cats-effect-testkit 3.7.1, androidx.test runner 1.7.0, UI Automator 2.4.0 |
 | IDE               | IntelliJ over BSP with library and `android.jar` sources                                 |
 
@@ -87,7 +89,7 @@ Paths are relative to `app/src/main/scala/dev/typelevel/hello`.
 | `app/src/test/scala`                  | Weaver suites for `State`, `tickerStream` and `routerStream`                                                                                    |
 | `app/src/androidTest/scala`           | `AppFlowSuite` runs in the app process on the emulator. `AppDriver` taps and checks views by the generated typed ids                            |
 
-## Docs (LLM generated)
+## Docs (LLM generated / Not human reviewed)
 
 | File                                                              | Content                                                           |
 |-------------------------------------------------------------------|-------------------------------------------------------------------|
@@ -99,9 +101,9 @@ Paths are relative to `app/src/main/scala/dev/typelevel/hello`.
 
 ## Limitations
 
-- State and route survive Activity recreation but not process death. Restoring them needs `onSaveInstanceState` or
-  disk
-- R8 is not wired into `build.mill`. The running guide has manual steps
+- State and route survive Activity recreation, but not the destruction of the process. Restoring them needs
+  `onSaveInstanceState` or disk (basically persist state if relevant)
+- R8 is not wired into `build.mill`. The running guide has manual steps on how it was set up
 - Instrumented tests run against the debug APK. The R8 build and process death are untested.
 - `ScalaLambdaFix` stays until cats and Cats Effect are rebuilt with a compiler that has
   [scala3#22632](https://github.com/scala/scala3/pull/22632)

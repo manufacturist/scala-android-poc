@@ -10,7 +10,7 @@ import mill.scalalib.*
 import millbuild.{LayoutBindings, ScalaLambdaFix}
 
 object androidSdkModule0 extends AndroidSdkModule {
-  def buildToolsVersion = "35.0.0"
+  def buildToolsVersion = "36.0.0"
 
   // android.jar holds stubs only. IntelliJ attaches sources to a jar when they sit next to it as
   // <name>-sources.jar, so copy android.jar into Task.dest and pack the SDK's sources/android-NN
@@ -50,7 +50,7 @@ object app extends AndroidAppScalaModule, LibrarySources {
   def androidSdkModule            = mill.api.ModuleRef(androidSdkModule0)
   // Scala 3.8+ lazy vals (stdlib included) use java.lang.invoke.VarHandle, which Android has from API 33.
   def androidMinSdk               = 33
-  def androidCompileSdk           = 35
+  def androidCompileSdk           = 36
   def androidApplicationId        = "dev.typelevel.hello"
   def androidApplicationNamespace = "dev.typelevel.hello"
 

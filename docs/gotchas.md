@@ -148,8 +148,9 @@ guards its own uses. Test other libraries on a device.
 
 ### Edge-to-edge
 
-With targetSdk 35 Android 15 draws content under the system bars. `res/layout/activity.xml` sets
-`android:fitsSystemWindows="true"` on the container.
+From targetSdk 35 Android draws content under the system bars. Target 36 removes the
+`windowOptOutEdgeToEdgeEnforcement` opt-out. `res/layout/activity.xml` sets `android:fitsSystemWindows="true"` on the
+container.
 
 ### Kotlin-only Android libraries
 
@@ -214,10 +215,9 @@ rewrites. Keep `ScalaLambdaFix` for debug and release builds.
 
 ### d8 warns about Kotlin metadata
 
-With AndroidX dependencies d8 from build-tools 35.0.0 prints about 900 warnings starting with
-`An error occurred when parsing kotlin metadata`. The libraries were compiled with a newer Kotlin than this d8 knows. d8
-only converts bytecode and does not need the metadata. The app passes full ART verification and runs. R8 from
-cmdline-tools 19.0 prints no such warnings.
+d8 from build-tools 35.0.0 printed about 900 warnings starting with `An error occurred when parsing kotlin metadata`
+for AndroidX and UI Automator. The libraries were compiled with a newer Kotlin than that d8 knew. The warnings did not
+affect the dex. d8 from build-tools 36.0.0 and R8 from cmdline-tools 19.0 print none.
 
 ### Malformed inner-class attribute info lines
 
@@ -263,10 +263,6 @@ Mill writes `testFramework` into the test manifest as the instrumentation class.
 ### Failure messages are only in logcat
 
 Mill's report says `No Exception or message provided`. Read `adb logcat -s TestRunner`.
-
-### d8 warns about Kotlin metadata
-
-UI Automator 2.4.0 is built with a newer Kotlin than build-tools 35 d8 knows. The warnings do not affect the dex.
 
 ## Toolchain
 
@@ -321,7 +317,7 @@ cleaning as unsupported. IntelliJ only initializes a new server. Restart BSP or 
 
 `android.jar` contains stubs only. IntelliJ attaches a source jar only when it sits in the same directory as the jar
 under the name `<name>-sources.jar`. `androidSdkModule0.androidPlatformJars` copies `android.jar` next to an
-`android-sources.jar` packed from the SDK's `sources/android-35`, and the build uses that copy.
+`android-sources.jar` packed from the SDK's `sources/android-36`, and the build uses that copy.
 
 ### Mill hangs while installing an SDK package
 
@@ -346,9 +342,17 @@ exits. `./mill shutdown` or a daemon restart stops the emulator. adb then hangs 
 emulator detached instead.
 
 ```sh
-nohup $ANDROID_HOME/emulator/emulator -avd mill_avd_android-35_arm64-v8a_medium_phone \
-  -port 5554 -no-metrics >/dev/null 2>&1 &
+nohup $ANDROID_HOME/emulator/emulator -avd mill_avd_android-36_arm64-v8a_medium_phone \
+  -port 5554 -no-metrics -gpu host >/dev/null 2>&1 &
 ```
+
+### API 36 emulator stalls
+
+`avdmanager` creates the AVD with `hw.gpu.enabled = no`, so the emulator renders in software. On the first boot of the
+API 36 Play image the guest load average reached 100, `system_server` and Play services hit ANRs, `screencap` hung and
+`adb install` inside `app.androidTest` timed out after 10 minutes. Restarted with `-gpu host` the emulator booted in
+17 s and the suite passed in 29 s. The restart also skipped first-boot work, so the two causes are not separated. Start
+the emulator with `-gpu host`.
 
 ### androidInstall fails with device not found
 
@@ -385,10 +389,10 @@ The app keeps its process. Check with `adb shell pidof dev.typelevel.hello`.
 On first use Mill installs these SDK packages.
 
 - cmdline-tools 19.0
-- build-tools 35.0.0
-- platform android-35
+- build-tools 36.0.0
+- platform android-36
 
-The API 35 Play system image takes 2.2 GB. `out/` takes about 140 MB.
+The API 36 Play system image takes 2.3 GB. `out/` takes about 140 MB.
 
 ## Versions
 
@@ -404,4 +408,4 @@ The API 35 Play system image takes 2.2 GB. `out/` takes about 140 MB.
 | weaver              | 0.13.0               | Built with 3.3.7, unpatched. JVM and instrumented tests      |
 | androidx.test       | runner 1.7.0         | `AndroidJUnitRunner`, `ActivityLifecycleMonitorRegistry`     |
 | UI Automator        | 2.4.0                | Instrumented tests. Kotlin, pulls kotlinx-coroutines 1.8.1   |
-| Android             | minSdk 33, target 35 | build-tools 35.0.0                                           |
+| Android             | minSdk 33, target 36 | build-tools 36.0.0                                           |
