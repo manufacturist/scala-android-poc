@@ -9,11 +9,12 @@ import fs2.concurrent.{Signal, SignallingRef}
 object Lifecycles:
 
   def whileCreated(owner: LifecycleOwner)(resource: Resource[IO, Unit])(using IORuntime): Unit =
-    val release = resource.useForever.unsafeRunCancelable()
+    val cancel = resource.useForever.unsafeRunCancelable()
 
+    // TODO: Learn more about these lifecycles
     owner.getLifecycle.addObserver(new DefaultLifecycleObserver {
       override def onDestroy(owner: LifecycleOwner): Unit =
-        release()
+        cancel()
     })
 
   def hidden(owner: LifecycleOwner): Resource[IO, Signal[IO, Boolean]] =

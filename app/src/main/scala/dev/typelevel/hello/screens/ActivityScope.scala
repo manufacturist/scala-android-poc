@@ -7,7 +7,7 @@ import cats.effect.std.Dispatcher
 import dev.typelevel.hello.domain.{Mutation, State}
 import fs2.concurrent.SignallingRef
 
-final case class Env(
+final case class ActivityScope(
     activity: AppCompatActivity,
     container: ViewGroup,
     dispatcher: Dispatcher[IO],

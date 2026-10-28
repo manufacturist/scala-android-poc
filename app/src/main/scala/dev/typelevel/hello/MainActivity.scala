@@ -15,5 +15,6 @@ class MainActivity extends AppCompatActivity:
     val layout = ActivityLayout.inflate(this.getLayoutInflater)
     this.setContentView(layout.rootView)
 
+    // Going to the background stops the Activity. The ApplicationScope outlives them as long as the process is alive
     val applicationScope = this.getApplication.asInstanceOf[HelloApplication].scope
     Lifecycles.whileCreated(this)(App.run(this, layout.container, applicationScope))

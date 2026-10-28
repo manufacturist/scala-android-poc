@@ -6,11 +6,11 @@ import dev.typelevel.hello.layouts.SettingsLayout
 import dev.typelevel.hello.platform.Views
 
 object SettingsScreen:
-  def apply(env: Env): Resource[IO, Unit] =
+  def apply(activityScope: ActivityScope): Resource[IO, Unit] =
     for
-      layout <- Views.mount(env.container, SettingsLayout)
+      layout <- Views.mount(activityScope.container, SettingsLayout)
 
-      _ <- Views.onClick(layout.reset)(env.send(Mutation.Reset))
-      _ <- Views.onClick(layout.back)(env.navigate(Route.Home))
-      _ <- Views.onBack(env.activity)(env.navigate(Route.Home))
+      _ <- Views.onClick(layout.reset)(activityScope.send(Mutation.Reset))
+      _ <- Views.onClick(layout.back)(activityScope.navigate(Route.Home))
+      _ <- Views.onBack(activityScope.activity)(activityScope.navigate(Route.Home))
     yield ()

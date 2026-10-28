@@ -22,13 +22,21 @@ object App:
       scope      <- Resource.eval(applicationScope)
       dispatcher <- Dispatcher.parallel[IO]
       hidden     <- Lifecycles.hidden(activity)
-      env         = Env(activity, container, dispatcher, scope.stateRef, scope.routeRef)
+
+      activityScope = ActivityScope(
+        activity = activity,
+        container = container,
+        dispatcher = dispatcher,
+        stateRef = scope.stateRef,
+        routeRef = scope.routeRef
+      )
 
       _ <- tickerStream(scope.stateRef, hidden).compile.drain.background
-      _ <- routerStream(scope.routeRef)(screen(_, env)).compile.drain.background
+      _ <- routerStream(scope.routeRef)(pickScreen(_, activityScope)).compile.drain.background
     yield ()
 
   def tickerStream(stateRef: Ref[IO, State], hiddenSignal: Signal[IO, Boolean]): Stream[IO, Nothing] =
+    // The goal here was to count ticks only when the app is visible
     val ticks = hiddenSignal.discrete.changes.switchMap { isHidden =>
       if isHidden then Stream.empty else Stream.awakeEvery[IO](1.second)
     }
@@ -40,7 +48,7 @@ object App:
       Stream.resource(screen(route)) >> Stream.never[IO]
     }
 
-  private def screen(route: Route, env: Env): Resource[IO, Unit] =
+  private def pickScreen(route: Route, activityScope: ActivityScope): Resource[IO, Unit] =
     route match
-      case Route.Home     => HomeScreen(env)
-      case Route.Settings => SettingsScreen(env)
+      case Route.Home     => HomeScreen(activityScope)
+      case Route.Settings => SettingsScreen(activityScope)

@@ -16,12 +16,12 @@ The cast to `HelloApplication` is safe only because the manifest names it.
 
 ## Scopes
 
-| Scope       | Started by                                                    | Lifetime                 | Holds                                                    |
-|-------------|---------------------------------------------------------------|--------------------------|----------------------------------------------------------|
-| Application | `HelloApplication`                                            | The process              | `ApplicationScope`: `stateRef`, `routeRef`               |
-| Activity    | `Lifecycles.whileCreated(App.run)` in `MainActivity.onCreate` | `onCreate` to ON_DESTROY | `Dispatcher`, `Env`, ticker fiber, router fiber          |
-| Visible     | `Lifecycles.hidden`                                           | `onStart` to `onStop`    | The ticker. A fresh `awakeEvery` per visible period      |
-| Screen      | `routerStream`                                                | Until the route changes  | Inflated layout, listeners, render fiber                 |
+| Scope       | Started by                                                    | Lifetime                 | Holds                                                         |
+|-------------|---------------------------------------------------------------|--------------------------|---------------------------------------------------------------|
+| Application | `HelloApplication`                                            | The process              | `ApplicationScope`: `stateRef`, `routeRef`                    |
+| Activity    | `Lifecycles.whileCreated(App.run)` in `MainActivity.onCreate` | `onCreate` to ON_DESTROY | `Dispatcher`, `ActivityScope`, `tickerStream`, `routerStream` |
+| Visible     | `Lifecycles.hidden`                                           | `onStart` to `onStop`    | The ticker. A fresh `awakeEvery` per visible period           |
+| Screen      | `routerStream`                                                | Until the route changes  | Inflated layout, listeners, `stateUpdateStream`               |
 
 `ApplicationScope.create.memoize.unsafeRunSync()` only creates the memo cell. The first run of `HelloApplication.scope`
 allocates the refs and later runs reuse them. State and route therefore survive rotation, dark mode and other Activity
@@ -37,8 +37,9 @@ The application scope never holds views. A View or Activity referenced from it w
 | `io-compute-N` | All fibers. One worker per CPU core. A breakpoint in `State.update` stops on `io-compute-0`                                                                           |
 | `RenderThread` | GPU rendering, owned by Android                                                                                                                                       |
 
-Android callbacks enter `IO` through a `Dispatcher` (`env.send`, `env.navigate`, `Lifecycles.hidden`). Nothing blocks
-the main thread. `unsafeRunSync` there deadlocks as soon as the effect needs `MainThread`.
+Android callbacks enter `IO` through a `Dispatcher` (`ActivityScope.send`, `ActivityScope.navigate`,
+`Lifecycles.hidden`). Nothing blocks the main thread. `unsafeRunSync` there deadlocks as soon as the effect needs
+`MainThread`.
 
 `platform/AndroidRuntime` is the single `IORuntime`. Its failure reporter logs unhandled errors under the tag
 `IORuntime`.
@@ -46,8 +47,8 @@ the main thread. `unsafeRunSync` there deadlocks as soon as the effect needs `Ma
 ## Navigation
 
 ```scala
-routerStream = scope.routeRef.discrete.changes.switchMap { route =>
-  Stream.resource(screen(route, env)) >> Stream.never[IO]
+routeSignal.discrete.changes.switchMap { route =>
+  Stream.resource(screen(route)) >> Stream.never[IO]
 }
 ```
 
@@ -63,8 +64,8 @@ inner (Settings)                                               waits for release
   acquired.
 - `switchMap` interrupts the current inner stream when a new route arrives. fs2 guarantees its finalizers finish before
   the next inner stream starts.
-- `Env.navigate(route)` sets `routeRef`. `SettingsScreen` registers a back handler with `Views.onBack` for as long as it
-  is mounted. Without one, back finishes the Activity.
+- `ActivityScope.navigate(route)` sets `routeRef`. `SettingsScreen` registers a back handler with `Views.onBack` for as
+  long as it is mounted. Without one, back finishes the Activity.
 
 ## Screens and layouts
 
@@ -91,11 +92,11 @@ inner (Settings)                                               waits for release
 
 ## Packages
 
-| Package    | Contents                                              | Imports from                    |
-|------------|-------------------------------------------------------|---------------------------------|
-| root       | `HelloApplication`, `MainActivity`                    | `app`, `platform`, `layouts`    |
-| `app`      | `App`, `ApplicationScope`                             | `domain`, `screens`, `platform` |
-| `domain`   | `State`, `Mutation`, `update`                         | nothing                         |
-| `screens`  | `Route`, `Env`, `HomeScreen`, `SettingsScreen`        | `domain`, `platform`, `layouts` |
-| `platform` | `AndroidRuntime`, `MainThread`, `Lifecycles`, `Views` | `layouts`                       |
-| `layouts`  | Generated bindings                                    | `R`                             |
+| Package    | Contents                                                 | Imports from                    |
+|------------|----------------------------------------------------------|---------------------------------|
+| root       | `HelloApplication`, `MainActivity`                       | `app`, `platform`, `layouts`    |
+| `app`      | `App`, `ApplicationScope`                                | `domain`, `screens`, `platform` |
+| `domain`   | `State`, `Mutation`, `update`                            | nothing                         |
+| `screens`  | `Route`, `ActivityScope`, `HomeScreen`, `SettingsScreen` | `domain`, `platform`, `layouts` |
+| `platform` | `AndroidRuntime`, `MainThread`, `Lifecycles`, `Views`    | `layouts`                       |
+| `layouts`  | Generated bindings                                       | `R`                             |

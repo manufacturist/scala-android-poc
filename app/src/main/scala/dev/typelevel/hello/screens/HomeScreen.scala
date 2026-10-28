@@ -6,15 +6,18 @@ import dev.typelevel.hello.layouts.HomeLayout
 import dev.typelevel.hello.platform.{MainThread, Views}
 
 object HomeScreen:
-  def apply(env: Env): Resource[IO, Unit] =
+  def apply(activityScope: ActivityScope): Resource[IO, Unit] =
     for
-      layout <- Views.mount(env.container, HomeLayout)
+      layout <- Views.mount(activityScope.container, HomeLayout)
+      
+      _ <- Views.onClick(layout.click)(activityScope.send(Mutation.Click))
+      _ <- Views.onClick(layout.settings)(activityScope.navigate(Route.Settings))
 
-      _ <- Views.onClick(layout.click)(env.send(Mutation.Click))
-      _ <- Views.onClick(layout.settings)(env.navigate(Route.Settings))
+      stateUpdateStream = activityScope.stateRef.discrete.foreach(state =>
+        MainThread(layout.status.setText(render(state)))
+      )
 
-      stateUpdateStream = env.stateRef.discrete.foreach(state => MainThread(layout.status.setText(render(state))))
-      _                <- stateUpdateStream.compile.drain.background
+      _ <- stateUpdateStream.compile.drain.background
     yield ()
 
   private def render(state: State): String =
